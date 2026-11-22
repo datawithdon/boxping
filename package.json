@@ -1,0 +1,12 @@
+{
+  "name": "boxping",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A ping for neighbours when the mail's in at a shared community mailbox. Static PWA; alerts relayed by ntfy.sh.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "python3 -m http.server 8000 --bind 127.0.0.1"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://ntfy.sh; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="BoxPing: neighbours on a shared community mailbox get a ping when someone sees the mail arrive. Join by scanning a QR sticker. Free, no account.">
+  <meta name="theme-color" content="#c2410c">
+  <title>BoxPing</title>
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="vendor/qrcode.js" defer></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/"><img src="icons/icon.svg" alt="" class="brand-mark" width="28" height="28">BoxPing</a>
+  </header>
+  <main id="view" tabindex="-1"><p class="muted center">Loading…</p></main>
+  <footer>
+    BoxPing is a neighbour project, not affiliated with Canada Post. Alerts are relayed by <a href="https://ntfy.sh" target="_blank" rel="noopener noreferrer">ntfy.sh</a>.
+    <a href="https://github.com/datawithdon/boxping" target="_blank" rel="noopener noreferrer">Source</a>
+  </footer>
+  <div id="print-area" aria-hidden="true"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <noscript><p class="center">BoxPing needs JavaScript.</p></noscript>
+</body>
+</html>

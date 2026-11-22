@@ -174,6 +174,7 @@ function renderBox(route) {
   document.title = `${box.name} · BoxPing`;
 
   let log = loadLog(box.topic);
+  let lastAlert = 0;
   let sending = false; // our own alert can echo back on the live stream before publish() returns
   const ingest = (raws, { live = false } = {}) => {
     const fresh = C.addEvents(log, raws.map((r) => C.parseEvent(r, box.topic)));
@@ -184,6 +185,9 @@ function renderBox(route) {
     const mine = new Set(box.mine.map((m) => m.id));
     for (const e of fresh) {
       if (mine.has(e.id) || e.kind !== "mail" || sending) continue;
+      // At most one alert per box every 10 minutes, so a flood can't spam the phone.
+      if (Date.now() - lastAlert < 10 * 60 * 1000) continue;
+      lastAlert = Date.now();
       if (document.hidden) notify(`Mail's in: ${box.name}`, `${e.who} spotted the carrier at ${fmtTime(e.time)}.`, boxUrl(box));
       else { toast(`\u{1F4EC} ${e.who} says mail's in!`); navigator.vibrate?.(200); }
     }
@@ -268,6 +272,7 @@ function renderBox(route) {
   const alerts = h("section", { class: "card" },
     h("h2", { text: "Get alerts when BoxPing is closed" }),
     h("p", { text: "BoxPing uses the free ntfy app for alerts in the background. Set it up once:" }),
+    h("p", { class: "hint", text: "BoxPing alerts only ever say the mail is in or the box was empty. Never tap a link or button in an alert that asks you to sign in, pay or download something." }),
     h("ol", { class: "steps" },
       h("li", {}, "Install ", h("strong", { text: "ntfy" }), " from the App Store or Google Play (free, no account)."),
       h("li", {}, "Tap ", h("strong", { text: "+" }), " to subscribe and paste this box's topic: ", topicCode, " ",
@@ -484,5 +489,9 @@ async function copy(text, msg) {
 
 // ---- Boot ----
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+// Trusted Types is enforced by the CSP; this one policy allows exactly one script URL.
+const tt = window.trustedTypes?.createPolicy("boxping", {
+  createScriptURL: (u) => { if (u === "sw.js") return u; throw new TypeError("blocked script URL"); },
+});
+if ("serviceWorker" in navigator) navigator.serviceWorker.register(tt ? tt.createScriptURL("sw.js") : "sw.js").catch(() => {});
 render();

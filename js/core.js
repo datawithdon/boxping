@@ -9,6 +9,7 @@ export const WHO_MAX = 24;
 export const KEEP_DAYS = 120;
 export const UNDO_WINDOW_MS = 30 * 60 * 1000;
 export const NEAR_METERS = 60;
+export const MAX_EVENTS = 600;
 
 const B62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const TAGS = { mail: "boxping-mail", empty: "boxping-empty", undo: "boxping-undo" };
@@ -139,7 +140,7 @@ export function parseEvent(ev, topic) {
   if (kind === "mail") {
     const r = /^Recent mail days: ([0-9, -]{0,200})$/m.exec(text);
     const latest = localDay(out.time);
-    out.days = r ? [...new Set(r[1].split(",").map((s) => s.trim()))].filter((d) => isRealDay(d) && d < latest).slice(-14) : [];
+    out.days = r ? [...new Set(r[1].split(",").map((s) => s.trim()))].filter((d) => isRealDay(d) && d < latest && d >= addDays(latest, -15)).slice(-14) : [];
   }
   return out;
 }
@@ -147,7 +148,8 @@ export function parseEvent(ev, topic) {
 // ---- The per-device log --------------------------------------------------
 
 export function emptyLog() {
-  return { events: {}, backfill: [] };
+  // Null prototype: event IDs come from the network and must never hit Object.prototype keys.
+  return { events: Object.create(null), backfill: [] };
 }
 
 /** Rebuild a stored log from a fixed schema, dropping anything odd or old. */
@@ -156,7 +158,8 @@ export function sanitizeLog(raw, now = Date.now()) {
   if (!raw || typeof raw !== "object") return log;
   const cutoff = now - KEEP_DAYS * 864e5;
   const evs = raw.events && typeof raw.events === "object" ? Object.values(raw.events) : [];
-  for (const e of evs.slice(-600)) {
+  evs.sort((a, b) => (a && Number.isFinite(a.time) ? a.time : 0) - (b && Number.isFinite(b.time) ? b.time : 0));
+  for (const e of evs.slice(-MAX_EVENTS)) {
     if (!e || !ID_RE.test(e.id || "") || !["mail", "empty", "undo"].includes(e.kind)) continue;
     if (typeof e.time !== "number" || !Number.isFinite(e.time) || e.time < cutoff || e.time > now + 864e5) continue;
     const c = { id: e.id, time: e.time, kind: e.kind, who: cleanWho(e.who) || "a neighbour" };
@@ -178,13 +181,26 @@ export function addEvents(log, parsed) {
     fresh.push(e);
     if (days && days.length) log.backfill = [...new Set([...log.backfill, ...days])].sort();
   }
+  // Anyone who knows the topic can post, so cap what a flood can store.
+  const all = Object.values(log.events);
+  if (all.length > MAX_EVENTS) {
+    all.sort((a, b) => a.time - b.time);
+    for (const e of all.slice(0, all.length - MAX_EVENTS)) delete log.events[e.id];
+  }
+  if (log.backfill.length > KEEP_DAYS) log.backfill = log.backfill.slice(-KEEP_DAYS);
   return fresh;
 }
 
 /** Events in time order with retracted mail alerts removed. */
 export function liveEvents(log) {
   const all = Object.values(log.events).sort((a, b) => a.time - b.time);
-  const retracted = new Set(all.filter((e) => e.kind === "undo").map((e) => e.ref));
+  // An undo only counts within the undo window after the alert it names, so
+  // a stray or hostile message can't erase older genuine alerts.
+  const retracted = new Set(all.filter((u) => {
+    if (u.kind !== "undo") return false;
+    const m = log.events[u.ref];
+    return !!m && m.kind === "mail" && u.time >= m.time && u.time - m.time <= UNDO_WINDOW_MS;
+  }).map((u) => u.ref));
   return all.filter((e) => e.kind !== "undo" && !(e.kind === "mail" && retracted.has(e.id)));
 }
 

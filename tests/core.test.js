@@ -183,3 +183,37 @@ test("distanceM is roughly right", () => {
   const b = { lat: 45.4224, lon: -75.6972 }; // ~100 m north
   assert.ok(Math.abs(C.distanceM(a, b) - 100) < 2);
 });
+
+test("security: an undo only retracts an alert within the undo window", () => {
+  const mail = C.parseEvent(ev("real", "mail", at(2026, 11, 20, 10), "Spotted by Sam"));
+  const late = C.parseEvent(ev("late", "undo", at(2026, 11, 23, 10), "Retracted by Mallory\nRef: real"));
+  const early = C.parseEvent(ev("early", "undo", at(2026, 11, 20, 9), "Retracted by Mallory\nRef: real"));
+  const log = C.emptyLog();
+  C.addEvents(log, [mail, late, early]);
+  assert.equal(C.liveEvents(log).length, 1);
+  C.addEvents(log, [C.parseEvent(ev("ok", "undo", at(2026, 11, 20, 10, 20), "Retracted by Sam\nRef: real"))]);
+  assert.equal(C.liveEvents(log).length, 0);
+});
+
+test("security: a message flood can't grow the stored log without limit", () => {
+  const log = C.emptyLog();
+  const now = Date.now();
+  const flood = [];
+  for (let i = 0; i < 5000; i++) flood.push(C.parseEvent(ev("f" + i, "mail", now - i * 1000, "Spotted by z")));
+  C.addEvents(log, flood);
+  assert.equal(Object.keys(log.events).length, C.MAX_EVENTS);
+  assert.ok(log.events.f0, "newest kept");
+  assert.ok(!log.events.f4999, "oldest dropped");
+});
+
+test("security: backfill days must be within two weeks of the alert", () => {
+  const p = C.parseEvent(ev("a", "mail", at(2026, 11, 20), "Spotted by Z\nRecent mail days: 2025-01-06, 2026-11-01, 2026-11-05, 2026-11-19"));
+  assert.deepEqual(p.days, ["2026-11-05", "2026-11-19"]);
+});
+
+test("security: network IDs can't collide with Object.prototype", () => {
+  const log = C.emptyLog();
+  const fresh = C.addEvents(log, [C.parseEvent(ev("constructor", "mail", at(2026, 11, 20), "Spotted by Z"))]);
+  assert.equal(fresh.length, 1);
+  assert.equal(Object.getPrototypeOf(C.sanitizeLog({ events: { a: { id: "a", time: Date.now(), kind: "mail" } } }).events), null);
+});
